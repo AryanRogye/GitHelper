@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var model: DiffViewModel
@@ -870,8 +871,8 @@ private struct FileTypeIcon: View {
 
     private var iconImage: NSImage {
         let ext = URL(fileURLWithPath: filePath).pathExtension
-        let resolvedType = ext.isEmpty ? "txt" : ext
-        let icon = NSWorkspace.shared.icon(forFileType: resolvedType)
+        let contentType = UTType(filenameExtension: ext) ?? .plainText
+        let icon = NSWorkspace.shared.icon(for: contentType)
         icon.size = NSSize(width: 16, height: 16)
         return icon
     }
