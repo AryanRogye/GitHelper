@@ -40,6 +40,47 @@ struct DiffFile: Identifiable {
     var hunks: [DiffHunk]
 }
 
+struct WorkingTreeChange: Identifiable, Hashable {
+    let statusCode: String
+    let path: String
+    let originalPath: String?
+
+    var id: String {
+        "\(statusCode)|\(originalPath ?? "")|\(path)"
+    }
+
+    var shortStatus: String {
+        let first = statusCode.first ?? " "
+        let second = statusCode.dropFirst().first ?? " "
+        let primary = first != " " ? first : second
+        if primary == "?" {
+            return "??"
+        }
+        if primary == "!" {
+            return "!!"
+        }
+        return String(primary)
+    }
+
+    var displayPath: String {
+        guard let originalPath, !originalPath.isEmpty else {
+            return path
+        }
+        return "\(originalPath) -> \(path)"
+    }
+}
+
+struct GitLogEntry: Identifiable, Hashable {
+    let id: String
+    let shortHash: String
+    let authorName: String
+    let authorEmail: String
+    let timestamp: Date
+    let subject: String
+    let decorations: String
+    let parentHashes: [String]
+}
+
 struct RepoContext {
     let branch: String
     let rootPath: String

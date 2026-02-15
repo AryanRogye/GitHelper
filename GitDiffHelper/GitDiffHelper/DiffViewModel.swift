@@ -3,6 +3,8 @@ import Combine
 
 @MainActor
 final class DiffViewModel: ObservableObject {
+    nonisolated static let allBranchesFilterLabel = "All Branches"
+
     @Published var repoPath: String = ""
     @Published var baseRef: String = ""
     @Published var headRef: String = ""
@@ -14,9 +16,19 @@ final class DiffViewModel: ObservableObject {
     @Published private(set) var isLoadingDiff = false
     @Published private(set) var files: [DiffFile] = []
     @Published private(set) var availableBranchRefs: [String] = ["HEAD"]
+    @Published private(set) var isLoadingLog = false
+    @Published private(set) var logEntries: [GitLogEntry] = []
+    @Published private(set) var logStatusLine = "Open Commit Log to view repository history."
+    @Published private(set) var logHasError = false
+    @Published var selectedLogBranchFilter = "All Branches"
     @Published private(set) var library: [RepoLibraryEntry] = []
     @Published var selectedLibraryRepoID: UUID?
     @Published var selectedLibrarySessionID: UUID?
+    @Published private(set) var currentBranchRef = "HEAD"
+    @Published private(set) var recentBranchCommits: [GitLogEntry] = []
+    @Published private(set) var isLoadingRecentBranchCommits = false
+    @Published private(set) var workingTreeChanges: [WorkingTreeChange] = []
+    @Published private(set) var pendingRevealFilePath: String?
 
     private var hasPerformedInitialLoad = false
     private var securityScopedRepoURL: URL?
@@ -25,6 +37,8 @@ final class DiffViewModel: ObservableObject {
     private let maxLibraryRepositories = 20
     private let maxSessionsPerRepository = 24
     private let libraryDefaultsKey = "BridgeDiff.RepoLibrary.v1"
+    private let recentBranchCommitLimit = 60
+    private var recentBranchCommitsLoadedForRef = ""
 
     deinit {
         if hasSecurityScopedAccess {
@@ -60,12 +74,17 @@ final class DiffViewModel: ObservableObject {
             statusLine = "Step 1: Choose a repository folder."
             hasError = false
             availableBranchRefs = ["HEAD"]
+            workingTreeChanges = []
+            pendingRevealFilePath = nil
         }
     }
 
     func chooseRepository(path: String) async {
         pendingBookmarkData = nil
         clearSecurityScopedAccess()
+        resetLogState()
+        resetRecentBranchCommitState()
+        pendingRevealFilePath = nil
         repoPath = path
         baseRef = ""
         headRef = ""
@@ -76,6 +95,9 @@ final class DiffViewModel: ObservableObject {
     func chooseRepository(url: URL) async {
         pendingBookmarkData = bookmarkData(for: url)
         activateSecurityScopedAccess(for: url)
+        resetLogState()
+        resetRecentBranchCommitState()
+        pendingRevealFilePath = nil
         repoPath = url.path
         baseRef = ""
         headRef = ""
@@ -89,6 +111,8 @@ final class DiffViewModel: ObservableObject {
         }
         selectedLibraryRepoID = id
         selectedLibrarySessionID = nil
+        resetLogState()
+        resetRecentBranchCommitState()
         prepareAccess(for: entry)
 
         if let latestSession = entry.sessions.first {
@@ -148,6 +172,152 @@ final class DiffViewModel: ObservableObject {
         await loadDiff()
     }
 
+    func compareAgainstCommit(_ commitHash: String) async {
+        baseRef = commitHash
+        headRef = ""
+        await loadDiff()
+    }
+
+    func compareBetweenCommits(baseHash: String, headHash: String) async {
+        baseRef = baseHash
+        headRef = headHash
+        await loadDiff()
+    }
+
+    func refreshWorkingTreeChanges() async {
+        let repoPath = self.repoPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !repoPath.isEmpty else {
+            workingTreeChanges = []
+            return
+        }
+
+        do {
+            workingTreeChanges = try await Task.detached {
+                try GitService.workingTreeChanges(repoPath: repoPath)
+            }.value
+        } catch {
+            workingTreeChanges = []
+        }
+    }
+
+    func openWorkingTreeChange(path: String) async {
+        let activeRepo = repoPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !activeRepo.isEmpty else {
+            return
+        }
+        let normalizedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedPath.isEmpty else {
+            return
+        }
+
+        pendingRevealFilePath = nil
+        pathFilter = ""
+        await loadUncommittedChanges()
+        pendingRevealFilePath = normalizedPath
+    }
+
+    func clearPendingRevealFilePath() {
+        pendingRevealFilePath = nil
+    }
+
+    func loadRecentBranchCommits(force: Bool = false) async {
+        let repoPath = self.repoPath
+        let branchRef = currentBranchRef.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !repoPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            recentBranchCommits = []
+            recentBranchCommitsLoadedForRef = ""
+            return
+        }
+        guard !branchRef.isEmpty else {
+            recentBranchCommits = []
+            recentBranchCommitsLoadedForRef = ""
+            return
+        }
+        guard force || recentBranchCommitsLoadedForRef != branchRef || recentBranchCommits.isEmpty else {
+            return
+        }
+
+        isLoadingRecentBranchCommits = true
+        defer { isLoadingRecentBranchCommits = false }
+
+        do {
+            let commitLimit = recentBranchCommitLimit
+            let commits = try await Task.detached {
+                try GitService.commitLog(repoPath: repoPath, branchRef: branchRef, maxCount: commitLimit)
+            }.value
+            recentBranchCommits = commits
+            recentBranchCommitsLoadedForRef = branchRef
+        } catch {
+            recentBranchCommits = []
+            recentBranchCommitsLoadedForRef = ""
+        }
+    }
+
+    func loadCommitLog(branchFilter: String? = nil) async {
+        let selectedFilter = (branchFilter ?? selectedLogBranchFilter)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedFilter = selectedFilter.isEmpty ? Self.allBranchesFilterLabel : selectedFilter
+        selectedLogBranchFilter = normalizedFilter
+
+        let repoPath = self.repoPath
+        guard !repoPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            logEntries = []
+            logHasError = true
+            logStatusLine = "Choose a repository folder first."
+            isLoadingLog = false
+            return
+        }
+
+        isLoadingLog = true
+        defer { isLoadingLog = false }
+        logHasError = false
+        logStatusLine = "Loading commit history..."
+
+        do {
+            let repoContextTask = Task.detached {
+                try GitService.repoContext(repoPath: repoPath)
+            }
+
+            let refsTask = Task.detached {
+                try GitService.branchRefs(repoPath: repoPath)
+            }
+
+            let logTask = Task.detached {
+                let ref = normalizedFilter == Self.allBranchesFilterLabel ? nil : normalizedFilter
+                return try GitService.commitLog(repoPath: repoPath, branchRef: ref)
+            }
+
+            let repoContext = try await repoContextTask.value
+            repoSummary = "\(repoContext.branch) • \(repoContext.rootPath)"
+
+            if let refs = try? await refsTask.value, !refs.isEmpty {
+                availableBranchRefs = refs
+            } else {
+                availableBranchRefs = ["HEAD", repoContext.branch]
+            }
+
+            let history = try await logTask.value
+            logEntries = history
+
+            if history.isEmpty {
+                logStatusLine = normalizedFilter == Self.allBranchesFilterLabel
+                    ? "No commits found."
+                    : "No commits found for \(normalizedFilter)."
+            } else {
+                if normalizedFilter == Self.allBranchesFilterLabel {
+                    logStatusLine = "Loaded \(history.count) commits from all branches."
+                } else {
+                    logStatusLine = "Loaded \(history.count) commits for \(normalizedFilter)."
+                }
+            }
+        } catch {
+            logEntries = []
+            logHasError = true
+            logStatusLine = friendlyLogErrorMessage(error)
+        }
+    }
+
     func loadDiff() async {
         let repoPath = self.repoPath
         let baseRef = self.baseRef
@@ -160,7 +330,12 @@ final class DiffViewModel: ObservableObject {
             hasError = true
             statusLine = "Choose a repository folder first."
             isLoadingDiff = false
+            workingTreeChanges = []
             return
+        }
+
+        let workingTreeTask = Task.detached {
+            try GitService.workingTreeChanges(repoPath: repoPath)
         }
 
         isLoadingDiff = true
@@ -183,6 +358,11 @@ final class DiffViewModel: ObservableObject {
 
             let repoContext = try await repoContextTask.value
             repoSummary = "\(repoContext.branch) • \(repoContext.rootPath)"
+            if currentBranchRef != repoContext.branch {
+                currentBranchRef = repoContext.branch
+                recentBranchCommits = []
+                recentBranchCommitsLoadedForRef = ""
+            }
             if let refs = try? await refsTask.value, !refs.isEmpty {
                 availableBranchRefs = refs
             } else {
@@ -212,12 +392,14 @@ final class DiffViewModel: ObservableObject {
                 }
                 statusLine = "Rendered \(parsed.count) files, \(hunkCount) hunks, \(bridgeCount) curved bridges."
             }
+            workingTreeChanges = (try? await workingTreeTask.value) ?? []
         } catch {
             files = []
             hasError = true
             repoSummary = "Repository unavailable."
             statusLine = friendlyErrorMessage(error)
             availableBranchRefs = ["HEAD"]
+            workingTreeChanges = (try? await workingTreeTask.value) ?? []
         }
     }
 
@@ -248,6 +430,41 @@ final class DiffViewModel: ObservableObject {
             }
         }
         return "Error: \(error.localizedDescription)"
+    }
+
+    private func friendlyLogErrorMessage(_ error: Error) -> String {
+        if let bridgeError = error as? BridgeDiffError {
+            switch bridgeError {
+            case .notGitRepository:
+                return "That folder is not a Git repository. Pick the project folder that contains .git."
+            case .invalidRef:
+                return "The selected branch is invalid."
+            case .invalidPathFilter:
+                return "The selected filter is invalid."
+            case .repositoryNotFound:
+                return "The selected folder does not exist."
+            case .repositoryNotDirectory:
+                return "The selected path is not a folder."
+            case .gitCommandFailed(let message):
+                return "Git log error: \(message)"
+            }
+        }
+        return "Error loading commit history: \(error.localizedDescription)"
+    }
+
+    private func resetLogState() {
+        selectedLogBranchFilter = Self.allBranchesFilterLabel
+        logEntries = []
+        logHasError = false
+        logStatusLine = "Open Commit Log to view repository history."
+        isLoadingLog = false
+    }
+
+    private func resetRecentBranchCommitState() {
+        currentBranchRef = "HEAD"
+        recentBranchCommits = []
+        isLoadingRecentBranchCommits = false
+        recentBranchCommitsLoadedForRef = ""
     }
 
     private func activateSecurityScopedAccess(for url: URL) {

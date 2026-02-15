@@ -36,6 +36,9 @@ enum GitService {
             args.append(base)
         } else if !head.isEmpty {
             args.append(head)
+        } else if repositoryHasHeadCommit(repositoryURL) {
+            // Use HEAD by default so "Working Changes" includes staged and unstaged edits.
+            args.append("HEAD")
         }
 
         if !path.isEmpty {
@@ -44,6 +47,16 @@ enum GitService {
         }
 
         return try runGit(args, in: repositoryURL)
+    }
+
+    nonisolated static func workingTreeChanges(repoPath: String) throws -> [WorkingTreeChange] {
+        let repositoryURL = try resolveRepositoryURL(repoPath)
+        try ensureGitRepository(repositoryURL)
+        let output = try runGit(
+            ["status", "--porcelain=1", "-z", "--untracked-files=all"],
+            in: repositoryURL
+        )
+        return parseWorkingTreeChanges(output)
     }
 
     nonisolated static func branchRefs(repoPath: String) throws -> [String] {
@@ -77,6 +90,74 @@ enum GitService {
         return refs
     }
 
+    nonisolated static func commitLog(
+        repoPath: String,
+        branchRef: String?,
+        maxCount: Int = 800
+    ) throws -> [GitLogEntry] {
+        let repositoryURL = try resolveRepositoryURL(repoPath)
+        try ensureGitRepository(repositoryURL)
+
+        let selectedBranch = branchRef?.trimmed() ?? ""
+        if !selectedBranch.isEmpty {
+            try validateGitRef(selectedBranch, name: "branch")
+        }
+
+        let baseArgs = [
+            "log",
+            "--date-order",
+            "--no-color",
+            "--decorate=short",
+            "--date=unix",
+            "--max-count=\(max(1, maxCount))",
+            "--pretty=format:%H%x1f%h%x1f%an%x1f%ae%x1f%ct%x1f%s%x1f%D%x1f%P%x1e"
+        ]
+
+        if selectedBranch.isEmpty {
+            var args = baseArgs
+            args.insert("--all", at: 1)
+            let output = try runGit(args, in: repositoryURL)
+            return parseCommitLog(output)
+        }
+
+        if isPrimaryBranchRef(selectedBranch) {
+            let output = try runGit(baseArgs + [selectedBranch], in: repositoryURL)
+            return parseCommitLog(output)
+        }
+
+        let selectedAliases = canonicalBranchAliases(for: selectedBranch)
+        if let baseBranch = try detectPrimaryBaseBranch(in: repositoryURL, excludingAliases: selectedAliases) {
+            // Prefer branch-specific commits first.
+            do {
+                let rangeOutput = try runGit(baseArgs + ["\(baseBranch)..\(selectedBranch)"], in: repositoryURL)
+                let rangeEntries = parseCommitLog(rangeOutput)
+                if !rangeEntries.isEmpty {
+                    return rangeEntries
+                }
+            } catch {
+                // If range lookup fails, fall back to direct branch history.
+            }
+        }
+
+        // If no primary base was detected (or range was empty), try commits unique
+        // to this branch versus all other refs. This handles repos that do not use
+        // main/master-style trunk names.
+        if let uniqueOutput = try? runBranchUniqueLog(
+            repositoryURL: repositoryURL,
+            selectedBranch: selectedBranch,
+            baseArgs: baseArgs
+        ) {
+            let uniqueEntries = parseCommitLog(uniqueOutput)
+            if !uniqueEntries.isEmpty {
+                return uniqueEntries
+            }
+        }
+
+        // Fallback for branches with no unique commits (or no detectable base).
+        let output = try runGit(baseArgs + [selectedBranch], in: repositoryURL)
+        return parseCommitLog(output)
+    }
+
     nonisolated private static func ensureGitRepository(_ directory: URL) throws {
         do {
             let result = try runGit(["rev-parse", "--is-inside-work-tree"], in: directory).trimmed()
@@ -90,6 +171,15 @@ enum GitService {
             throw BridgeDiffError.gitCommandFailed(message)
         } catch {
             throw error
+        }
+    }
+
+    nonisolated private static func repositoryHasHeadCommit(_ directory: URL) -> Bool {
+        do {
+            _ = try runGit(["rev-parse", "--verify", "--quiet", "HEAD"], in: directory)
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -150,6 +240,226 @@ enum GitService {
             throw BridgeDiffError.gitCommandFailed(message)
         }
         return output
+    }
+
+    nonisolated private static func parseWorkingTreeChanges(_ output: String) -> [WorkingTreeChange] {
+        let records = output.split(separator: "\0", omittingEmptySubsequences: true)
+        guard !records.isEmpty else {
+            return []
+        }
+
+        var changes: [WorkingTreeChange] = []
+        changes.reserveCapacity(records.count)
+
+        var index = 0
+        while index < records.count {
+            let record = String(records[index])
+            guard record.count >= 4 else {
+                index += 1
+                continue
+            }
+
+            let statusCode = String(record.prefix(2))
+            let currentPath = String(record.dropFirst(3))
+            let isRenameOrCopy = statusCode.contains("R") || statusCode.contains("C")
+
+            if isRenameOrCopy, index + 1 < records.count {
+                let newPath = String(records[index + 1])
+                changes.append(
+                    WorkingTreeChange(
+                        statusCode: statusCode,
+                        path: newPath,
+                        originalPath: currentPath
+                    )
+                )
+                index += 2
+                continue
+            }
+
+            changes.append(
+                WorkingTreeChange(
+                    statusCode: statusCode,
+                    path: currentPath,
+                    originalPath: nil
+                )
+            )
+            index += 1
+        }
+
+        return changes
+    }
+
+    nonisolated private static func parseCommitLog(_ output: String) -> [GitLogEntry] {
+        let recordSeparator: Character = "\u{001E}"
+        let fieldSeparator: Character = "\u{001F}"
+
+        var entries: [GitLogEntry] = []
+        entries.reserveCapacity(256)
+
+        for record in output.split(separator: recordSeparator, omittingEmptySubsequences: true) {
+            let fields = record.split(separator: fieldSeparator, omittingEmptySubsequences: false)
+            guard fields.count >= 7 else {
+                continue
+            }
+
+            let hash = String(fields[0]).trimmed()
+            guard !hash.isEmpty else {
+                continue
+            }
+
+            let shortHash = String(fields[1]).trimmed()
+            let authorName = String(fields[2]).trimmed()
+            let authorEmail = String(fields[3]).trimmed()
+            let timestampSeconds = TimeInterval(String(fields[4]).trimmed()) ?? 0
+            let subject = String(fields[5]).trimmed()
+            let decorations = String(fields[6]).trimmed()
+            let parentHashes: [String]
+            if fields.count >= 8 {
+                parentHashes = String(fields[7])
+                    .split(separator: " ")
+                    .map { String($0).trimmed() }
+                    .filter { !$0.isEmpty }
+            } else {
+                parentHashes = []
+            }
+
+            entries.append(
+                GitLogEntry(
+                    id: hash,
+                    shortHash: shortHash.isEmpty ? String(hash.prefix(7)) : shortHash,
+                    authorName: authorName.isEmpty ? "Unknown Author" : authorName,
+                    authorEmail: authorEmail,
+                    timestamp: Date(timeIntervalSince1970: timestampSeconds),
+                    subject: subject.isEmpty ? "(no commit message)" : subject,
+                    decorations: decorations,
+                    parentHashes: parentHashes
+                )
+            )
+        }
+
+        return entries
+    }
+
+    nonisolated private static func detectPrimaryBaseBranch(
+        in repositoryURL: URL,
+        excludingAliases: Set<String>
+    ) throws -> String? {
+        let refsRaw = try runGit(
+            ["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"],
+            in: repositoryURL
+        )
+
+        let refs = Set(
+            refsRaw
+                .split(separator: "\n")
+                .map { String($0).trimmed() }
+                .filter { !$0.isEmpty && !$0.hasSuffix("/HEAD") }
+        )
+
+        guard !refs.isEmpty else {
+            return nil
+        }
+
+        var candidates: [String] = []
+
+        if let remoteHead = try? runGit(
+            ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+            in: repositoryURL
+        ).trimmed(),
+           !remoteHead.isEmpty {
+            candidates.append(remoteHead)
+            if remoteHead.hasPrefix("origin/") {
+                candidates.append(String(remoteHead.dropFirst("origin/".count)))
+            }
+        }
+
+        candidates.append(contentsOf: [
+            "main",
+            "origin/main",
+            "master",
+            "origin/master",
+            "trunk",
+            "origin/trunk",
+            "develop",
+            "origin/develop",
+            "dev",
+            "origin/dev"
+        ])
+
+        for candidate in candidates where refs.contains(candidate) {
+            let aliases = canonicalBranchAliases(for: candidate)
+            if excludingAliases.isDisjoint(with: aliases) {
+                return candidate
+            }
+        }
+
+        return nil
+    }
+
+    nonisolated private static func canonicalBranchAliases(for ref: String) -> Set<String> {
+        let value = ref.trimmed()
+        guard !value.isEmpty else {
+            return []
+        }
+
+        var aliases: Set<String> = [value]
+        if value.hasPrefix("origin/") {
+            aliases.insert(String(value.dropFirst("origin/".count)))
+        } else if !value.contains("/") {
+            aliases.insert("origin/\(value)")
+        }
+        return aliases
+    }
+
+    nonisolated private static func isPrimaryBranchRef(_ ref: String) -> Bool {
+        let aliases = canonicalBranchAliases(for: ref)
+        let primaryRefs: Set<String> = [
+            "main",
+            "origin/main",
+            "master",
+            "origin/master",
+            "trunk",
+            "origin/trunk",
+            "develop",
+            "origin/develop",
+            "dev",
+            "origin/dev"
+        ]
+        return !aliases.isDisjoint(with: primaryRefs)
+    }
+
+    nonisolated private static func runBranchUniqueLog(
+        repositoryURL: URL,
+        selectedBranch: String,
+        baseArgs: [String]
+    ) throws -> String {
+        let selectedAliases = canonicalBranchAliases(for: selectedBranch)
+        let refsRaw = try runGit(
+            ["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"],
+            in: repositoryURL
+        )
+
+        var otherRefs: [String] = []
+        var seen = Set<String>()
+        for ref in refsRaw
+            .split(separator: "\n")
+            .map({ String($0).trimmed() })
+            .filter({ !$0.isEmpty && !$0.hasSuffix("/HEAD") })
+        {
+            let aliases = canonicalBranchAliases(for: ref)
+            if !selectedAliases.isDisjoint(with: aliases) {
+                continue
+            }
+            if seen.insert(ref).inserted {
+                otherRefs.append(ref)
+            }
+        }
+
+        guard !otherRefs.isEmpty else {
+            return ""
+        }
+
+        return try runGit(baseArgs + [selectedBranch, "--not"] + otherRefs, in: repositoryURL)
     }
 }
 
