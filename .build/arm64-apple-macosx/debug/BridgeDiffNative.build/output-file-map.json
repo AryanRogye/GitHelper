@@ -1,0 +1,47 @@
+{
+  "": {
+    "swift-dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/master.swiftdeps"
+  },
+  "/Users/aryanrogye/Code/Projects/GitDiffTool/Sources/BridgeDiffNative/BridgeDiffNativeApp.swift": {
+    "dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/BridgeDiffNativeApp.d",
+    "object": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/BridgeDiffNativeApp.swift.o",
+    "swiftmodule": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/BridgeDiffNativeApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/BridgeDiffNativeApp.swiftdeps",
+    "diagnostics": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/BridgeDiffNativeApp.dia"
+  },
+  "/Users/aryanrogye/Code/Projects/GitDiffTool/Sources/BridgeDiffNative/ContentView.swift": {
+    "dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/ContentView.d",
+    "object": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/ContentView.swift.o",
+    "swiftmodule": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/ContentView~partial.swiftmodule",
+    "swift-dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/ContentView.swiftdeps",
+    "diagnostics": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/ContentView.dia"
+  },
+  "/Users/aryanrogye/Code/Projects/GitDiffTool/Sources/BridgeDiffNative/DiffModels.swift": {
+    "dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffModels.d",
+    "object": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffModels.swift.o",
+    "swiftmodule": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffModels~partial.swiftmodule",
+    "swift-dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffModels.swiftdeps",
+    "diagnostics": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffModels.dia"
+  },
+  "/Users/aryanrogye/Code/Projects/GitDiffTool/Sources/BridgeDiffNative/DiffParser.swift": {
+    "dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffParser.d",
+    "object": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffParser.swift.o",
+    "swiftmodule": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffParser~partial.swiftmodule",
+    "swift-dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffParser.swiftdeps",
+    "diagnostics": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffParser.dia"
+  },
+  "/Users/aryanrogye/Code/Projects/GitDiffTool/Sources/BridgeDiffNative/DiffViewModel.swift": {
+    "dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffViewModel.d",
+    "object": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffViewModel.swift.o",
+    "swiftmodule": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffViewModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffViewModel.swiftdeps",
+    "diagnostics": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/DiffViewModel.dia"
+  },
+  "/Users/aryanrogye/Code/Projects/GitDiffTool/Sources/BridgeDiffNative/GitService.swift": {
+    "dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/GitService.d",
+    "object": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/GitService.swift.o",
+    "swiftmodule": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/GitService~partial.swiftmodule",
+    "swift-dependencies": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/GitService.swiftdeps",
+    "diagnostics": "/Users/aryanrogye/Code/Projects/GitDiffTool/.build/arm64-apple-macosx/debug/BridgeDiffNative.build/GitService.dia"
+  }
+}
