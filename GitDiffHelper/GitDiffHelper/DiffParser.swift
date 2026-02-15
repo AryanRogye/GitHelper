@@ -7,9 +7,8 @@ enum DiffParser {
             return []
         }
 
-        let lines = normalized.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var parser = UnifiedDiffParser()
-        for line in lines {
+        for line in normalized.split(separator: "\n", omittingEmptySubsequences: false) {
             parser.consume(line: line)
         }
         parser.finish()
@@ -25,7 +24,7 @@ private struct UnifiedDiffParser {
     private var oldLineNumber = 0
     private var newLineNumber = 0
 
-    mutating func consume(line: String) {
+    mutating func consume(line: Substring) {
         if line.hasPrefix("diff --git ") {
             finalizeCurrentFile()
             let displayPath = parseFilePath(fromDiffHeader: line)
@@ -65,7 +64,7 @@ private struct UnifiedDiffParser {
             }
             oldLineNumber = oldStart
             newLineNumber = newStart
-            currentHunkHeader = line
+            currentHunkHeader = String(line)
             currentRows = []
             return
         }
@@ -98,7 +97,7 @@ private struct UnifiedDiffParser {
             newLineNumber += 1
         case "\\":
             currentRows.append(
-                DiffRow(kind: .meta, oldLineNumber: nil, newLineNumber: nil, text: line)
+                DiffRow(kind: .meta, oldLineNumber: nil, newLineNumber: nil, text: String(line))
             )
         default:
             break
@@ -130,7 +129,7 @@ private struct UnifiedDiffParser {
         currentFile = nil
     }
 
-    private func parseFilePath(fromDiffHeader line: String) -> String {
+    private func parseFilePath(fromDiffHeader line: Substring) -> String {
         let components = line.split(separator: " ")
         guard components.count >= 4 else {
             return ""
@@ -139,7 +138,7 @@ private struct UnifiedDiffParser {
         return rhs.replacingOccurrences(of: "b/", with: "", options: [.anchored])
     }
 
-    private func parseHunkHeader(_ line: String) -> (Int, Int)? {
+    private func parseHunkHeader(_ line: Substring) -> (Int, Int)? {
         let parts = line.split(separator: " ")
         guard parts.count >= 3 else {
             return nil

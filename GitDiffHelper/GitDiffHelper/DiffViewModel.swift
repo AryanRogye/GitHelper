@@ -11,6 +11,7 @@ final class DiffViewModel: ObservableObject {
     @Published private(set) var repoSummary: String = "No repository selected."
     @Published private(set) var statusLine: String = "Step 1: Choose a repository folder."
     @Published private(set) var hasError = false
+    @Published private(set) var isLoadingDiff = false
     @Published private(set) var files: [DiffFile] = []
     @Published private(set) var availableBranchRefs: [String] = ["HEAD"]
     @Published private(set) var library: [RepoLibraryEntry] = []
@@ -158,9 +159,12 @@ final class DiffViewModel: ObservableObject {
             repoSummary = "No repository selected."
             hasError = true
             statusLine = "Choose a repository folder first."
+            isLoadingDiff = false
             return
         }
 
+        isLoadingDiff = true
+        defer { isLoadingDiff = false }
         statusLine = "Loading diff from git..."
         hasError = false
 
@@ -186,7 +190,8 @@ final class DiffViewModel: ObservableObject {
             }
 
             let diff = try await diffTask.value
-            let parsed = DiffParser.parse(diff)
+            statusLine = "Parsing diff..."
+            let parsed = await parseDiffOffMain(diff)
             files = parsed
 
             recordSession(
@@ -213,6 +218,15 @@ final class DiffViewModel: ObservableObject {
             repoSummary = "Repository unavailable."
             statusLine = friendlyErrorMessage(error)
             availableBranchRefs = ["HEAD"]
+        }
+    }
+
+    private func parseDiffOffMain(_ diff: String) async -> [DiffFile] {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let parsed = DiffParser.parse(diff)
+                continuation.resume(returning: parsed)
+            }
         }
     }
 

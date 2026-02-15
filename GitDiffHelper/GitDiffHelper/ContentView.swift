@@ -5,6 +5,9 @@ struct ContentView: View {
     @EnvironmentObject private var model: DiffViewModel
     @Namespace private var glassNamespace
     @State private var showAdvancedSheet = false
+    @State private var visibleFileCount = 0
+
+    private static let fileRenderBatchSize = 24
 
     private var selectedLibraryEntry: RepoLibraryEntry? {
         guard let selectedID = model.selectedLibraryRepoID else {
@@ -211,6 +214,10 @@ struct ContentView: View {
         }
         .task {
             await model.initialLoadIfNeeded()
+            resetVisibleFiles(totalFiles: model.files.count)
+        }
+        .onReceive(model.$files) { files in
+            resetVisibleFiles(totalFiles: files.count)
         }
     }
 
@@ -268,7 +275,18 @@ struct ContentView: View {
 
     @ViewBuilder
     private var diffArea: some View {
-        if model.files.isEmpty {
+        if model.isLoadingDiff && model.files.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                ProgressView("Loading diff...")
+                    .controlSize(.regular)
+                Text("Parsing changes. Large diffs can take a moment.")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(16)
+            .glassCard()
+        } else if model.files.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("No diff loaded")
                     .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -280,11 +298,31 @@ struct ContentView: View {
             .padding(16)
             .glassCard()
         } else {
-            ScrollView {
-                LazyVStack(spacing: 10) {
-                    ForEach(model.files) { file in
-                        DiffFileCard(file: file)
+            ZStack(alignment: .topTrailing) {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(visibleFiles) { file in
+                            DiffFileCard(file: file)
+                        }
+
+                        if visibleFileCount < model.files.count {
+                            ProgressView("Loading more files...")
+                                .controlSize(.small)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity)
+                                .onAppear {
+                                    loadMoreFilesIfNeeded(totalFiles: model.files.count)
+                                }
+                        }
                     }
+                }
+
+                if model.isLoadingDiff {
+                    ProgressView()
+                        .controlSize(.small)
+                        .padding(10)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(8)
                 }
             }
             .glassCard()
@@ -330,6 +368,22 @@ struct ContentView: View {
             .replacingOccurrences(of: "HEAD~1", with: "Previous Commit")
             .replacingOccurrences(of: "HEAD", with: "Current Commit")
             .replacingOccurrences(of: "->", with: "→")
+    }
+
+    private var visibleFiles: ArraySlice<DiffFile> {
+        let maxVisible = min(visibleFileCount, model.files.count)
+        return model.files.prefix(maxVisible)
+    }
+
+    private func resetVisibleFiles(totalFiles: Int) {
+        visibleFileCount = min(totalFiles, Self.fileRenderBatchSize)
+    }
+
+    private func loadMoreFilesIfNeeded(totalFiles: Int) {
+        guard visibleFileCount < totalFiles else {
+            return
+        }
+        visibleFileCount = min(totalFiles, visibleFileCount + Self.fileRenderBatchSize)
     }
 }
 
@@ -494,6 +548,9 @@ private struct StatusChip: View {
 
 private struct DiffFileCard: View {
     let file: DiffFile
+    @State private var visibleHunkCount = 0
+
+    private static let hunkBatchSize = 12
 
     var body: some View {
         VStack(spacing: 0) {
@@ -509,12 +566,29 @@ private struct DiffFileCard: View {
             .padding(.vertical, 8)
             .background(NativeTheme.headerRow)
 
-            ForEach(Array(file.hunks.enumerated()), id: \.element.id) { index, hunk in
-                if index > 0 {
-                    Divider()
-                        .background(NativeTheme.border.opacity(0.8))
+            LazyVStack(spacing: 0) {
+                ForEach(0..<visibleHunkUpperBound, id: \.self) { index in
+                    if index > 0 {
+                        Divider()
+                            .background(NativeTheme.border.opacity(0.8))
+                    }
+                    HunkView(hunk: file.hunks[index])
                 }
-                HunkView(hunk: hunk)
+
+                if visibleHunkUpperBound < file.hunks.count {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .onAppear {
+                            loadMoreHunksIfNeeded()
+                        }
+                }
+            }
+        }
+        .onAppear {
+            if visibleHunkCount == 0 {
+                visibleHunkCount = min(Self.hunkBatchSize, file.hunks.count)
             }
         }
         .overlay(
@@ -523,6 +597,17 @@ private struct DiffFileCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .background(NativeTheme.fileCardBackground)
+    }
+
+    private var visibleHunkUpperBound: Int {
+        min(visibleHunkCount, file.hunks.count)
+    }
+
+    private func loadMoreHunksIfNeeded() {
+        guard visibleHunkCount < file.hunks.count else {
+            return
+        }
+        visibleHunkCount = min(file.hunks.count, visibleHunkCount + Self.hunkBatchSize)
     }
 }
 
@@ -610,6 +695,10 @@ private enum DiffSide {
 private struct HunkView: View {
     let hunk: DiffHunk
 
+    private static let rowChunkSize = 320
+    private static let bridgeOverlayRowLimit = 1800
+    private static let separatorRowLimit = 4000
+
     var body: some View {
         VStack(spacing: 0) {
             Text(hunk.header)
@@ -620,27 +709,70 @@ private struct HunkView: View {
                 .padding(.vertical, 5)
                 .background(NativeTheme.hunkHeaderBackground)
 
-            VStack(spacing: 0) {
-                ForEach(Array(hunk.rows.enumerated()), id: \.element.id) { index, row in
-                    DiffLineRow(row: row)
-                        .frame(height: DiffGridStyle.rowHeight)
-                        .overlay(alignment: .top) {
-                            if index > 0 {
-                                Rectangle()
-                                    .fill(DiffGridStyle.gridLine.opacity(0.62))
-                                    .frame(height: 1)
-                            }
-                        }
+            LazyVStack(spacing: 0) {
+                ForEach(rowChunks, id: \.lowerBound) { range in
+                    HunkRowsChunkView(
+                        rows: hunk.rows,
+                        rowRange: range,
+                        showsSeparators: shouldDrawRowSeparators
+                    )
                 }
             }
             .background(NativeTheme.fileCardBackground)
             .overlay {
-                BridgeOverlay(
-                    bridges: hunk.bridges,
-                    rowHeight: DiffGridStyle.rowHeight,
-                    gutterWidth: DiffGridStyle.gutterWidth
-                )
+                if shouldRenderBridgeOverlay {
+                    BridgeOverlay(
+                        bridges: hunk.bridges,
+                        rowHeight: DiffGridStyle.rowHeight,
+                        gutterWidth: DiffGridStyle.gutterWidth
+                    )
+                }
             }
+        }
+    }
+
+    private var rowChunks: [Range<Int>] {
+        guard !hunk.rows.isEmpty else {
+            return []
+        }
+
+        var chunks: [Range<Int>] = []
+        chunks.reserveCapacity((hunk.rows.count / Self.rowChunkSize) + 1)
+
+        var lowerBound = 0
+        while lowerBound < hunk.rows.count {
+            let upperBound = min(lowerBound + Self.rowChunkSize, hunk.rows.count)
+            chunks.append(lowerBound..<upperBound)
+            lowerBound = upperBound
+        }
+        return chunks
+    }
+
+    private var shouldRenderBridgeOverlay: Bool {
+        !hunk.bridges.isEmpty && hunk.rows.count <= Self.bridgeOverlayRowLimit
+    }
+
+    private var shouldDrawRowSeparators: Bool {
+        hunk.rows.count <= Self.separatorRowLimit
+    }
+}
+
+private struct HunkRowsChunkView: View {
+    let rows: [DiffRow]
+    let rowRange: Range<Int>
+    let showsSeparators: Bool
+
+    var body: some View {
+        ForEach(rowRange, id: \.self) { rowIndex in
+            DiffLineRow(row: rows[rowIndex])
+                .frame(height: DiffGridStyle.rowHeight)
+                .overlay(alignment: .top) {
+                    if showsSeparators && rowIndex > 0 {
+                        Rectangle()
+                            .fill(DiffGridStyle.gridLine.opacity(0.62))
+                            .frame(height: 1)
+                    }
+                }
         }
     }
 }
