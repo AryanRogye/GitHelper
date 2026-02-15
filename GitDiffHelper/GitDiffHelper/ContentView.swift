@@ -352,16 +352,16 @@ struct ContentView: View {
     @ViewBuilder
     private var diffArea: some View {
         if model.isLoadingDiff && model.files.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                ProgressView("Loading diff...")
-                    .controlSize(.regular)
-                Text("Parsing changes. Large diffs can take a moment.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(16)
-            .glassCard()
+//            VStack(alignment: .leading, spacing: 12) {
+//                ProgressView("Loading diff...")
+//                    .controlSize(.regular)
+//                Text("Parsing changes. Large diffs can take a moment.")
+//                    .font(.system(size: 13, weight: .medium, design: .rounded))
+//                    .foregroundStyle(.secondary)
+//            }
+//            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+//            .padding(16)
+//            .glassCard()
         } else if model.files.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("No diff loaded")
@@ -938,6 +938,10 @@ private enum NativeTheme {
     static let contextBackground = Color(nsColor: .textBackgroundColor)
     static let lineNumber = Color(nsColor: .secondaryLabelColor)
     static let placeholderLineNumber = Color(nsColor: .secondaryLabelColor).opacity(0.48)
+    static let deleteLineNumber = Color(nsColor: .systemRed).opacity(0.72)
+    static let addLineNumber = Color(nsColor: .systemGreen).opacity(0.72)
+    static let deleteLineNumberBackground = Color(nsColor: .systemRed).opacity(0.11)
+    static let addLineNumberBackground = Color(nsColor: .systemGreen).opacity(0.11)
     static let lineNumberGutter = Color(nsColor: .underPageBackgroundColor).opacity(0.92)
     static let hunkHeaderText = Color(nsColor: .secondaryLabelColor)
     static let hunkHeaderBackground = Color(nsColor: .underPageBackgroundColor).opacity(0.7)
@@ -1059,7 +1063,7 @@ private struct HunkView: View {
         guard let focusedHunkID else {
             return 0.9
         }
-        return focusedHunkID == hunk.id ? 1.15 : 0.16
+        return focusedHunkID == hunk.id ? 1.15 : 1.0
     }
 }
 
@@ -1116,10 +1120,10 @@ private struct SideGridCell: View {
 
         HStack(spacing: 0) {
             ZStack(alignment: .trailing) {
-                NativeTheme.lineNumberGutter
+                cell.lineNumberBackground
                 Text(cell.lineNumber.map(String.init) ?? "")
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(cell.placeholder ? NativeTheme.placeholderLineNumber : NativeTheme.lineNumber)
+                    .foregroundStyle(cell.lineNumberColor)
                     .padding(.trailing, 8)
             }
             .frame(width: DiffGridStyle.numberGutterWidth, alignment: .trailing)
@@ -1160,6 +1164,8 @@ private struct SideGridCell: View {
         text: String,
         background: Color,
         markerColor: Color,
+        lineNumberBackground: Color,
+        lineNumberColor: Color,
         placeholder: Bool
     ) {
         switch row.kind {
@@ -1170,6 +1176,8 @@ private struct SideGridCell: View {
                 text: row.text,
                 background: NativeTheme.contextBackground,
                 markerColor: .secondary,
+                lineNumberBackground: NativeTheme.lineNumberGutter,
+                lineNumberColor: NativeTheme.lineNumber,
                 placeholder: false
             )
         case .delete:
@@ -1180,6 +1188,8 @@ private struct SideGridCell: View {
                     text: row.text,
                     background: NativeTheme.deleteBackground,
                     markerColor: NativeTheme.deleteMarker,
+                    lineNumberBackground: NativeTheme.deleteLineNumberBackground,
+                    lineNumberColor: NativeTheme.deleteLineNumber,
                     placeholder: false
                 )
             }
@@ -1189,6 +1199,8 @@ private struct SideGridCell: View {
                 text: " ",
                 background: NativeTheme.deletePlaceholderBackground,
                 markerColor: NativeTheme.placeholderLineNumber,
+                lineNumberBackground: NativeTheme.lineNumberGutter,
+                lineNumberColor: NativeTheme.placeholderLineNumber,
                 placeholder: true
             )
         case .add:
@@ -1199,6 +1211,8 @@ private struct SideGridCell: View {
                     text: row.text,
                     background: NativeTheme.addBackground,
                     markerColor: NativeTheme.addMarker,
+                    lineNumberBackground: NativeTheme.addLineNumberBackground,
+                    lineNumberColor: NativeTheme.addLineNumber,
                     placeholder: false
                 )
             }
@@ -1208,6 +1222,8 @@ private struct SideGridCell: View {
                 text: " ",
                 background: NativeTheme.addPlaceholderBackground,
                 markerColor: NativeTheme.placeholderLineNumber,
+                lineNumberBackground: NativeTheme.lineNumberGutter,
+                lineNumberColor: NativeTheme.placeholderLineNumber,
                 placeholder: true
             )
         case .meta:
@@ -1217,6 +1233,8 @@ private struct SideGridCell: View {
                 text: row.text,
                 background: NativeTheme.metaBackground,
                 markerColor: .secondary,
+                lineNumberBackground: NativeTheme.lineNumberGutter,
+                lineNumberColor: NativeTheme.lineNumber,
                 placeholder: false
             )
         }
@@ -1279,8 +1297,13 @@ private struct BridgeOverlay: View {
                 let guideOpacity = max(0.1, min(opacityScale * 0.85, 0.8))
 
                 let centerX = size.width * 0.5
-                let leftX = centerX - (gutterWidth * 0.38) + 7
-                let rightX = centerX + (gutterWidth * 0.38) - 7
+                let gutterHalf = gutterWidth * 0.5
+                let guideInset: CGFloat = 3
+                let bridgeOverlap: CGFloat = 1.5
+                let leftGuideX = centerX - gutterHalf + guideInset
+                let rightGuideX = centerX + gutterHalf - guideInset
+                let leftX = centerX - gutterHalf - bridgeOverlap
+                let rightX = centerX + gutterHalf + bridgeOverlap
 
                 var centerGuide = Path()
                 centerGuide.move(to: CGPoint(x: centerX, y: 0))
@@ -1292,8 +1315,8 @@ private struct BridgeOverlay: View {
                 )
 
                 var leftGuide = Path()
-                leftGuide.move(to: CGPoint(x: leftX, y: 0))
-                leftGuide.addLine(to: CGPoint(x: leftX, y: size.height))
+                leftGuide.move(to: CGPoint(x: leftGuideX, y: 0))
+                leftGuide.addLine(to: CGPoint(x: leftGuideX, y: size.height))
                 context.stroke(
                     leftGuide,
                     with: .color(NativeTheme.sideGuides.opacity(guideOpacity)),
@@ -1301,8 +1324,8 @@ private struct BridgeOverlay: View {
                 )
 
                 var rightGuide = Path()
-                rightGuide.move(to: CGPoint(x: rightX, y: 0))
-                rightGuide.addLine(to: CGPoint(x: rightX, y: size.height))
+                rightGuide.move(to: CGPoint(x: rightGuideX, y: 0))
+                rightGuide.addLine(to: CGPoint(x: rightGuideX, y: size.height))
                 context.stroke(
                     rightGuide,
                     with: .color(NativeTheme.sideGuides.opacity(guideOpacity)),
@@ -1319,10 +1342,11 @@ private struct BridgeOverlay: View {
                         continue
                     }
 
-                    let sourceTop = CGFloat(deletedMin) * rowHeight
-                    let sourceBottom = CGFloat(deletedMax + 1) * rowHeight
-                    let targetTop = CGFloat(addedMin) * rowHeight
-                    let targetBottom = CGFloat(addedMax + 1) * rowHeight
+                    let verticalExtension = min(3, rowHeight * 0.14)
+                    let sourceTop = max(0, CGFloat(deletedMin) * rowHeight - verticalExtension)
+                    let sourceBottom = min(size.height, CGFloat(deletedMax + 1) * rowHeight + verticalExtension)
+                    let targetTop = max(0, CGFloat(addedMin) * rowHeight - verticalExtension)
+                    let targetBottom = min(size.height, CGFloat(addedMax + 1) * rowHeight + verticalExtension)
                     let sourceMid = (sourceTop + sourceBottom) * 0.5
                     let targetMid = (targetTop + targetBottom) * 0.5
 
@@ -1391,5 +1415,6 @@ private extension View {
 
 #Preview {
     ContentView()
+        .frame(width: 700, height: 500)
         .environmentObject(DiffViewModel())
 }
