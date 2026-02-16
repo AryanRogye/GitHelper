@@ -59,6 +59,64 @@ enum GitService {
         return parseWorkingTreeChanges(output)
     }
 
+    nonisolated static func remotes(repoPath: String) throws -> [String] {
+        let repositoryURL = try resolveRepositoryURL(repoPath)
+        try ensureGitRepository(repositoryURL)
+        let output = try runGit(["remote"], in: repositoryURL)
+        return output
+            .split(separator: "\n")
+            .map { String($0).trimmed() }
+            .filter { !$0.isEmpty }
+    }
+
+    nonisolated static func currentBranch(repoPath: String) throws -> String {
+        let repositoryURL = try resolveRepositoryURL(repoPath)
+        try ensureGitRepository(repositoryURL)
+        return try runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: repositoryURL).trimmed()
+    }
+
+    nonisolated static func upstreamForCurrentBranch(repoPath: String) -> String? {
+        do {
+            let repositoryURL = try resolveRepositoryURL(repoPath)
+            try ensureGitRepository(repositoryURL)
+            let upstream = try runGit(
+                ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+                in: repositoryURL
+            ).trimmed()
+            return upstream.isEmpty ? nil : upstream
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated static func commitAndPush(
+        repoPath: String,
+        message: String,
+        remote: String
+    ) throws {
+        let repositoryURL = try resolveRepositoryURL(repoPath)
+        try ensureGitRepository(repositoryURL)
+
+        let commitMessage = message.trimmed()
+        if commitMessage.isEmpty {
+            throw BridgeDiffError.gitCommandFailed("Commit message is empty.")
+        }
+
+        let pushRemote = remote.trimmed()
+        if pushRemote.isEmpty {
+            throw BridgeDiffError.gitCommandFailed("No remote selected for push.")
+        }
+
+        let branch = try runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: repositoryURL).trimmed()
+        if branch.isEmpty || branch == "HEAD" {
+            throw BridgeDiffError.gitCommandFailed("Cannot push from detached HEAD.")
+        }
+
+        _ = try runGit(["add", "."], in: repositoryURL)
+        _ = try runGit(["commit", "-m", commitMessage], in: repositoryURL)
+        _ = try runGit(["push", pushRemote, branch], in: repositoryURL)
+    }
+
     nonisolated static func branchRefs(repoPath: String) throws -> [String] {
         let repositoryURL = try resolveRepositoryURL(repoPath)
         try ensureGitRepository(repositoryURL)
