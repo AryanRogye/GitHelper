@@ -28,6 +28,41 @@ You do not need GitHub to use BridgeDiff.
 - Can be used offline for diff and log workflows
 - Does not require pushing code anywhere
 
+## Screenshots
+
+<table>
+<tr>
+<td align="center">
+<b>Menubar</b><br/>
+<img src="https://github.com/user-attachments/assets/bbcff479-8715-48fc-a517-569e77d337db" width="350"/>
+</td>
+
+<td align="center">
+<b>Advanced Diff Tools</b><br/>
+<img src="https://github.com/user-attachments/assets/861ead0e-081a-4d2a-8030-6d19ca98dfab" width="350"/>
+</td>
+</tr>
+
+<tr>
+<td align="center">
+<b>Better Diffing</b><br/>
+<img src="https://github.com/user-attachments/assets/9a5b5948-269b-4eea-a697-c921921e9f6b" width="600"/>
+</td>
+
+<td align="center">
+<b>View Logs</b><br/>
+<img src="https://github.com/user-attachments/assets/7a5582fa-e813-4ee1-998e-e25ac60a360f" width="600"/>
+</td>
+</tr>
+
+<tr>
+<td colspan="2" align="center">
+<b>Visualize Branches</b><br/>
+<img src="https://github.com/user-attachments/assets/c5fe5f76-3418-48d4-b289-0795923cc3f2" width="900"/>
+</td>
+</tr>
+</table>
+
 ## Quick Start (2 Minutes)
 
 1. Open `GitDiffHelper/GitDiffHelper.xcodeproj` in Xcode.
