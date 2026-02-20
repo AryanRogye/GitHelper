@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Xcode build products
+DerivedData/
+build/
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Xcode user-specific files
+*.xcuserstate
+**/xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.key
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
