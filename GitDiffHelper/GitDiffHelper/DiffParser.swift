@@ -28,7 +28,13 @@ private struct UnifiedDiffParser {
         if line.hasPrefix("diff --git ") {
             finalizeCurrentFile()
             let displayPath = parseFilePath(fromDiffHeader: line)
-            currentFile = DiffFile(displayPath: displayPath, oldPath: "", newPath: "", hunks: [])
+            currentFile = DiffFile(
+                displayPath: displayPath,
+                oldPath: "",
+                newPath: "",
+                hunks: [],
+                seen: false
+            )
             return
         }
 

@@ -230,9 +230,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Formatting Helpers
-
-
     // MARK: - Incremental Diff Rendering
     private func resetVisibleFiles(totalFiles: Int) {
         visibleFileCount = min(totalFiles, Self.fileRenderBatchSize)

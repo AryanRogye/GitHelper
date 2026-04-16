@@ -69,33 +69,7 @@ struct DiffArea: View {
             ScrollViewReader { proxy in
                 ZStack(alignment: .topTrailing) {
                     ScrollView {
-                        LazyVStack(spacing: 10, pinnedViews: [.sectionHeaders]) {
-                            ForEach(visibleFiles) { file in
-                                Section {
-                                    DiffFileCard(
-                                        file: file,
-                                        focusedHunkID: $focusedHunkID,
-                                        typography: diffTypography
-                                    )
-                                } header: {
-                                    DiffFileStickyHeader(
-                                        file: file,
-                                        isActive: file.id == activeFileID
-                                    )
-                                    .id(file.id)
-                                }
-                            }
-                            
-                            if visibleFileCount < model.files.count {
-                                ProgressView("Loading more files...")
-                                    .controlSize(.small)
-                                    .padding(.vertical, 12)
-                                    .frame(maxWidth: .infinity)
-                                    .onAppear {
-                                        loadMoreFilesIfNeeded(totalFiles: model.files.count)
-                                    }
-                            }
-                        }
+                        diffList
                     }
                     
                     if model.isLoadingDiff {
@@ -117,6 +91,39 @@ struct DiffArea: View {
                 }
             }
             .glassCard()
+        }
+    }
+    
+    private var diffList: some View {
+        LazyVStack(spacing: 10, pinnedViews: [.sectionHeaders]) {
+            ForEach(visibleFiles) { file in
+                Section {
+                    DiffFileCard(
+                        file: file,
+                        focusedHunkID: $focusedHunkID,
+                        typography: diffTypography
+                    )
+                } header: {
+                    DiffFileStickyHeader(
+                        file: file,
+                        isActive: file.id == activeFileID
+                    ) { seen in
+                        model.markFileSeen(file: file, seen: seen)
+                        
+                    }
+                    .id(file.id)
+                }
+            }
+            
+            if visibleFileCount < model.files.count {
+                ProgressView("Loading more files...")
+                    .controlSize(.small)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
+                    .onAppear {
+                        loadMoreFilesIfNeeded(totalFiles: model.files.count)
+                    }
+            }
         }
     }
     

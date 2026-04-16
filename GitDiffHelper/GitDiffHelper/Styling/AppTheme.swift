@@ -14,6 +14,7 @@ enum NativeTheme {
     static let sidebarIconBorder = Color(nsColor: .separatorColor).opacity(0.35)
     static let field = Color(nsColor: .textBackgroundColor)
     static let border = Color(nsColor: .separatorColor)
+    static let seenBorder = Color.accentColor.opacity(0.9)
     static let topPathText = Color(nsColor: .labelColor).opacity(0.84)
     static let fileListPrimary = Color.primary.opacity(0.9)
     static let headerRow = Color(nsColor: .underPageBackgroundColor)

@@ -26,6 +26,10 @@ struct DiffFileCard: View {
     @State private var visibleHunkCount = 0
 
     private static let hunkBatchSize = 12
+    
+    var strokeColor: Color {
+        file.seen ? NativeTheme.seenBorder : NativeTheme.border
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,12 +62,12 @@ struct DiffFileCard: View {
                 visibleHunkCount = min(Self.hunkBatchSize, file.hunks.count)
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(NativeTheme.border, lineWidth: 1)
+                .stroke(strokeColor, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .background(NativeTheme.fileCardBackground)
+        .background(NativeTheme.fileCardBackground, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var visibleHunkUpperBound: Int {
@@ -83,6 +87,7 @@ struct DiffFileCard: View {
 struct DiffFileStickyHeader: View {
     let file: DiffFile
     var isActive: Bool = false
+    var onToggleSeen: (Bool) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -102,9 +107,18 @@ struct DiffFileStickyHeader: View {
                 }
             }
             Spacer()
-            Text("\(file.hunks.count) hunk\(file.hunks.count == 1 ? "" : "s")")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(NativeTheme.readableSecondary)
+            VStack {
+                Text("\(file.hunks.count) hunk\(file.hunks.count == 1 ? "" : "s")")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(NativeTheme.readableSecondary)
+                /// Mark As Seen Here
+                Toggle("Seen", isOn: Binding(
+                    get: { file.seen },
+                    set: { newValue in
+                        onToggleSeen(newValue)
+                    }
+                ))
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -115,7 +129,7 @@ struct DiffFileStickyHeader: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(
-                    isActive ? Color.accentColor.opacity(0.42) : NativeTheme.border.opacity(0.82),
+                    isActive ? Color.accentColor.opacity(0.42) : file.seen ? NativeTheme.seenBorder.opacity(0.82) : NativeTheme.border.opacity(0.82),
                     lineWidth: 1
                 )
         )
@@ -190,7 +204,10 @@ struct HunkView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(NativeTheme.hunkHeaderBackground)
+                .background(NativeTheme.hunkHeaderBackground, in: .rect(
+                    topLeadingRadius: 10,
+                    topTrailingRadius: 10
+                ))
 
             LazyVStack(spacing: 0) {
                 ForEach(rowChunks, id: \.lowerBound) { range in

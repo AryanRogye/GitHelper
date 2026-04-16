@@ -632,4 +632,12 @@ final class DiffViewModel: ObservableObject {
             await loadCommitLog(branchFilter: selectedLogBranchFilter)
         }
     }
+    
+    public func markFileSeen(file: DiffFile, seen: Bool) {
+        if let index = files.firstIndex(where: { $0.id == file.id }) {
+            if files.indices.contains(index) {
+                files[index].seen = seen
+            }
+        }
+    }
 }

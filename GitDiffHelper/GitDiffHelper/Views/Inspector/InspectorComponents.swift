@@ -186,7 +186,7 @@ struct StatusChip: View {
                 .truncationMode(.middle)
                 .foregroundStyle(isError ? Color.red : Color.primary)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .glassEffect(.regular.interactive(), in: Capsule())
         .glassEffectID(id, in: namespace)
