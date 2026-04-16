@@ -623,4 +623,13 @@ final class DiffViewModel: ObservableObject {
             relativeTo: nil
         )
     }
+    
+    public func ensureCommitLogLoaded() async {
+        guard !repoPath.isEmpty, !isLoadingLog else {
+            return
+        }
+        if logEntries.isEmpty || logHasError {
+            await loadCommitLog(branchFilter: selectedLogBranchFilter)
+        }
+    }
 }

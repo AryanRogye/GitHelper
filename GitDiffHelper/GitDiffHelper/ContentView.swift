@@ -61,7 +61,7 @@ struct ContentView: View {
             case .diff:
                 await model.loadRecentBranchCommits()
             case .log, .tree:
-                await ensureCommitLogLoaded()
+                await model.ensureCommitLogLoaded()
             }
         }
         .onReceive(model.$files) { files in
@@ -81,7 +81,7 @@ struct ContentView: View {
                 }
             } else {
                 Task {
-                    await ensureCommitLogLoaded()
+                    await model.ensureCommitLogLoaded()
                 }
             }
         }
@@ -143,7 +143,9 @@ struct ContentView: View {
                         focusedHunkID: $focusedHunkID
                     )
                 case .log:
-                    commitLogArea
+                    GitCommitLogArea(
+                        
+                    )
                 case .tree:
                     commitTreeArea
                 }
@@ -209,81 +211,6 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private var commitLogArea: some View {
-        if model.repoPath.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("No repository selected")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                Text("Choose a repository, then open Commit Log.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(16)
-            .glassCard()
-        } else if model.isLoadingLog && model.logEntries.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                ProgressView("Loading commit history...")
-                    .controlSize(.regular)
-                Text("Reading commits from Git.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(16)
-            .glassCard()
-            .task {
-                await ensureCommitLogLoaded()
-            }
-        } else if model.logEntries.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("No commits found")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                Text(model.logStatusLine)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                Button {
-                    Task {
-                        await model.loadCommitLog(branchFilter: model.selectedLogBranchFilter)
-                    }
-                } label: {
-                    Label("Reload Commit Log", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(16)
-            .glassCard()
-            .task {
-                await ensureCommitLogLoaded()
-            }
-        } else {
-            ZStack(alignment: .topTrailing) {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(model.logEntries) { entry in
-                            CommitLogRow(entry: entry)
-                        }
-                    }
-                    .padding(8)
-                }
-
-                if model.isLoadingLog {
-                    ProgressView()
-                        .controlSize(.small)
-                        .padding(10)
-                        .background(.regularMaterial, in: Capsule())
-                        .padding(8)
-                }
-            }
-            .glassCard()
-            .task {
-                await ensureCommitLogLoaded()
-            }
-        }
-    }
-
-    @ViewBuilder
     private var commitTreeArea: some View {
         if model.repoPath.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
@@ -308,7 +235,7 @@ struct ContentView: View {
             .padding(16)
             .glassCard()
             .task {
-                await ensureCommitLogLoaded()
+                await model.ensureCommitLogLoaded()
             }
         } else if model.logEntries.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
@@ -330,7 +257,7 @@ struct ContentView: View {
             .padding(16)
             .glassCard()
             .task {
-                await ensureCommitLogLoaded()
+                await model.ensureCommitLogLoaded()
             }
         } else {
             ZStack(alignment: .topTrailing) {
@@ -352,7 +279,7 @@ struct ContentView: View {
             }
             .glassCard()
             .task {
-                await ensureCommitLogLoaded()
+                await model.ensureCommitLogLoaded()
             }
         }
     }
@@ -375,15 +302,6 @@ struct ContentView: View {
             Task {
                 await model.chooseRepository(url: selectedURL)
             }
-        }
-    }
-
-    private func ensureCommitLogLoaded() async {
-        guard !model.repoPath.isEmpty, !model.isLoadingLog else {
-            return
-        }
-        if model.logEntries.isEmpty || model.logHasError {
-            await model.loadCommitLog(branchFilter: model.selectedLogBranchFilter)
         }
     }
 
