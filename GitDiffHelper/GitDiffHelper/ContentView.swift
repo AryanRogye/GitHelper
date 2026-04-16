@@ -53,21 +53,6 @@ struct ContentView: View {
         selectedScreen == .diff ? model.hasError : model.logHasError
     }
 
-    private var logBranchMenuOptions: [String] {
-        var refs = [DiffViewModel.allBranchesFilterLabel]
-        refs.append(contentsOf: model.availableBranchRefs)
-        var seen = Set<String>()
-        return refs.filter { seen.insert($0).inserted }
-    }
-
-    private var logBranchFilterLabel: String {
-        let selected = model.selectedLogBranchFilter
-        if selected == DiffViewModel.allBranchesFilterLabel {
-            return selected
-        }
-        return friendlyRefName(selected)
-    }
-
     private var selectedTwoCommitBase: GitLogEntry? {
         guard let selectedTwoCommitBaseID else {
             return nil
@@ -86,313 +71,15 @@ struct ContentView: View {
         DiffTypography.clamp(CGFloat(storedDiffTextScale))
     }
 
-    private var diffTypography: DiffTypography {
-        DiffTypography(scale: diffTextScale)
-    }
-
     private var treeTypography: CommitTreeTypography {
         CommitTreeTypography(scale: CGFloat(storedTreeScale))
     }
 
     var body: some View {
         NavigationSplitView {
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        NativeTheme.sidebarTop,
-                        NativeTheme.sidebarBottom
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-
-                List {
-                    Section {
-                        SidebarSearchField(text: $librarySearchText)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 10, trailing: 12))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                    }
-
-                    Section {
-                        if filteredLibrary.isEmpty {
-                            Text(model.library.isEmpty ? "No repositories saved yet." : "No repositories match your search.")
-                                .foregroundStyle(NativeTheme.readableSecondary)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                        } else {
-                            ForEach(filteredLibrary) { entry in
-                                let status = libraryStatus(for: entry)
-                                Button {
-                                    Task {
-                                        await model.loadLibraryRepository(id: entry.id)
-                                    }
-                                } label: {
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Image(systemName: status.symbol)
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .frame(width: 16, alignment: .leading)
-                                            .foregroundStyle(status.color)
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            Text(entry.displayName)
-                                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                                .foregroundStyle(NativeTheme.fileListPrimary)
-                                            HStack(spacing: 6) {
-                                                Text(status.title)
-                                                    .font(.system(size: 11, weight: .semibold))
-                                                    .foregroundStyle(status.color)
-                                                Text("• \(friendlyRefName(entry.lastBranch)) • \(entry.lastOpenedAt.formatted(date: .abbreviated, time: .shortened))")
-                                                    .font(.system(size: 11, weight: .regular))
-                                                    .foregroundStyle(NativeTheme.readableSecondary)
-                                            }
-                                            .lineLimit(1)
-                                        }
-                                        Spacer(minLength: 0)
-                                    }
-                                    .sidebarSelectableRow(isSelected: model.selectedLibraryRepoID == entry.id)
-                                }
-                                .buttonStyle(.plain)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        model.removeLibraryRepository(id: entry.id)
-                                    } label: {
-                                        Label("Remove from Library", systemImage: "trash")
-                                    }
-                                }
-                            }
-                        }
-                    } header: {
-                        SidebarSectionHeader("Repository Library")
-                    }
-
-                    if let selectedEntry = selectedLibraryEntry {
-                        Section {
-                            DisclosureGroup(isExpanded: $showRecentComparisons) {
-                                if displayedSessions.isEmpty {
-                                    Text("No sessions yet for this repository.")
-                                        .foregroundStyle(NativeTheme.readableSecondary)
-                                        .padding(.top, 8)
-                                } else {
-                                    VStack(spacing: 0) {
-                                        ForEach(displayedSessions) { session in
-                                            Button {
-                                                Task {
-                                                    await model.loadLibrarySession(repoID: selectedEntry.id, sessionID: session.id)
-                                                }
-                                            } label: {
-                                                VStack(alignment: .leading, spacing: 8) {
-                                                    Text(friendlyCompareLabel(session.compareLabel))
-                                                        .font(.system(size: 12, weight: .semibold))
-                                                        .foregroundStyle(NativeTheme.fileListPrimary)
-                                                    Text("\(session.fileCount) files • \(session.hunkCount) hunks • \(session.bridgeCount) bridges")
-                                                        .font(.system(size: 11, weight: .regular))
-                                                        .foregroundStyle(NativeTheme.readableSecondary)
-                                                    Text(session.timestamp.formatted(date: .abbreviated, time: .shortened))
-                                                        .font(.system(size: 10, weight: .regular))
-                                                        .foregroundStyle(NativeTheme.readableSecondary)
-                                                }
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .sidebarSelectableRow(isSelected: model.selectedLibrarySessionID == session.id)
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                    .padding(.top, 8)
-                                }
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(NativeTheme.readableSecondary)
-                                    Text("Recent Comparisons")
-                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(NativeTheme.readableSecondary)
-                                }
-                            }
-                            .tint(NativeTheme.readableSecondary)
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
-            }
-            .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 360)
+            sidebar
         } detail: {
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        NativeTheme.windowTop,
-                        NativeTheme.windowBottom
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(spacing: 12) {
-                        topGlassPanel
-                        switch selectedScreen {
-                        case .diff:
-                            diffArea
-                        case .log:
-                            commitLogArea
-                        case .tree:
-                            commitTreeArea
-                        }
-                    }
-
-                    if selectedScreen == .diff, showAdvancedInspector {
-                        AdvancedCompareInspector(model: model) {
-                            showAdvancedInspector = false
-                        }
-                        .frame(width: 360)
-                    }
-                }
-                .padding(16)
-                .animation(.easeInOut(duration: 0.18), value: showAdvancedInspector)
-            }
-            .navigationTitle("BridgeDiff")
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    Picker("Screen", selection: $selectedScreen) {
-                        Label("Diff", systemImage: "rectangle.split.2x1").tag(WorkbenchScreen.diff)
-                        Label("Commit Log", systemImage: "clock.arrow.circlepath").tag(WorkbenchScreen.log)
-                        Label("Commit Tree", systemImage: "arrow.triangle.branch").tag(WorkbenchScreen.tree)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 340)
-                    .help("Switch between diff view, commit history, and commit tree.")
-                }
-
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        chooseRepositoryFolder()
-                    } label: {
-                        ToolbarSymbolLabel("Choose Repository", systemImage: "folder.badge.plus")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .tint(Color.accentColor)
-                    .help("Pick a folder that contains your .git repository")
-                    .accessibilityLabel("Choose Repository")
-                    .accessibilityHint("Opens a folder picker so you can select the Git repository to inspect.")
-                }
-
-                if selectedScreen == .diff {
-                    ToolbarItemGroup(placement: .automatic) {
-                        ControlGroup {
-                            Button {
-                                Task {
-                                    await model.loadUncommittedChanges()
-                                }
-                            } label: {
-                                ToolbarSymbolLabel("Working Changes", systemImage: "square.and.pencil")
-                            }
-                            .help("Show files changed in your working folder that are not committed yet.")
-                            .accessibilityLabel("Show Working Changes")
-                            .accessibilityHint("Loads differences between the files you are editing and your latest saved commit.")
-
-                            Button {
-                                Task {
-                                    await model.loadLastCommit()
-                                }
-                            } label: {
-                                ToolbarSymbolLabel("Recent Commit", systemImage: "clock")
-                            }
-                            .help("Compare the latest commit with the one right before it.")
-                            .accessibilityLabel("Compare Recent Commit")
-                            .accessibilityHint("Shows what changed in the most recently created commit.")
-
-                            Menu {
-                                if model.availableBranchRefs.filter({ $0 != "HEAD" }).isEmpty {
-                                    Text("No branches found")
-                                } else {
-                                    ForEach(model.availableBranchRefs.filter { $0 != "HEAD" }, id: \.self) { branch in
-                                        Button(branch) {
-                                            Task {
-                                                await model.compareAgainstBranch(branch)
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                ToolbarSymbolLabel("Compare Branch", systemImage: "arrow.triangle.branch")
-                            }
-                            .help("Compare your current work with another branch.")
-                            .accessibilityLabel("Compare to Branch")
-                            .accessibilityHint("Opens a menu of branches so you can compare against one.")
-
-                            Menu {
-                                compareCommitMenuContent
-                            } label: {
-                                ToolbarSymbolLabel("Compare Commit", systemImage: "clock.badge.checkmark")
-                            }
-                            .help("Compare a past commit on the current branch against your current working state.")
-                            .accessibilityLabel("Compare to Past Commit")
-                            .accessibilityHint("Choose a commit from the current branch and compare it to what you have now.")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .tint(Color.accentColor)
-                        .disabled(model.repoPath.isEmpty)
-
-                        Button {
-                            showAdvancedInspector.toggle()
-                        } label: {
-                            ToolbarSymbolLabel("Custom Compare", systemImage: showAdvancedInspector ? "sidebar.trailing" : "slider.horizontal.3")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .tint(Color.accentColor)
-                        .disabled(model.repoPath.isEmpty)
-                        .help("Open advanced options for custom comparisons and path filters.")
-                        .accessibilityLabel("Advanced Compare")
-                        .accessibilityHint("Opens options to compare specific commits or branches and filter to a file or folder path.")
-                    }
-                } else {
-                    ToolbarItemGroup(placement: .automatic) {
-                        Menu {
-                            ForEach(logBranchMenuOptions, id: \.self) { ref in
-                                Button(friendlyRefName(ref)) {
-                                    Task {
-                                        await model.loadCommitLog(branchFilter: ref)
-                                    }
-                                }
-                            }
-                        } label: {
-                            ToolbarSymbolLabel(logBranchFilterLabel, systemImage: "line.3.horizontal.decrease.circle")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .tint(Color.accentColor)
-                        .disabled(model.repoPath.isEmpty || model.isLoadingLog)
-                        .help("Filter commit history and tree to one branch or show all branches.")
-                        .accessibilityLabel("Commit Log Branch Filter")
-                        .accessibilityHint("Select which branch history is visible in commit history screens.")
-
-                        Button {
-                            Task {
-                                await model.loadCommitLog(branchFilter: model.selectedLogBranchFilter)
-                            }
-                        } label: {
-                            ToolbarSymbolLabel("Refresh Log", systemImage: "arrow.clockwise")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .tint(Color.accentColor)
-                        .disabled(model.repoPath.isEmpty || model.isLoadingLog)
-                        .help("Reload commit history and tree from Git.")
-                        .accessibilityLabel("Refresh Commit History")
-                        .accessibilityHint("Refreshes commit history screens from Git with the current branch filter.")
-                    }
-                }
-            }
+            mainContent
         }
         .task {
             await model.initialLoadIfNeeded()
@@ -470,6 +157,176 @@ struct ContentView: View {
             }
         }
     }
+    
+    private var mainContent: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 12) {
+                topGlassPanel
+                switch selectedScreen {
+                case .diff:
+                    DiffArea(
+                        selectedScreen: $selectedScreen,
+                        visibleFileCount: $visibleFileCount,
+                        focusedHunkID: $focusedHunkID
+                    )
+                case .log:
+                    commitLogArea
+                case .tree:
+                    commitTreeArea
+                }
+            }
+            
+            if selectedScreen == .diff, showAdvancedInspector {
+                AdvancedCompareInspector(model: model) {
+                    showAdvancedInspector = false
+                }
+                .frame(width: 360)
+            }
+        }
+        .padding(16)
+        .animation(.easeInOut(duration: 0.18), value: showAdvancedInspector)
+        .navigationTitle("BridgeDiff")
+        .toolbar {
+            GitDiffToolbar(
+                showAdvancedInspector: $showAdvancedInspector,
+                selectedScreen: $selectedScreen,
+                selectedTwoCommitBaseID: $selectedTwoCommitBaseID,
+                onChooseRepositoryFolder: {
+                    chooseRepositoryFolder()
+                }
+            )
+        }
+    }
+    
+    // MARK: - Sidebar
+    private var sidebar: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    NativeTheme.sidebarTop,
+                    NativeTheme.sidebarBottom
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
+            List {
+                Section {
+                    SidebarSearchField(text: $librarySearchText)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 10, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
+                
+                Section {
+                    if filteredLibrary.isEmpty {
+                        Text(model.library.isEmpty ? "No repositories saved yet." : "No repositories match your search.")
+                            .foregroundStyle(NativeTheme.readableSecondary)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    } else {
+                        ForEach(filteredLibrary) { entry in
+                            let status = libraryStatus(for: entry)
+                            Button {
+                                Task {
+                                    await model.loadLibraryRepository(id: entry.id)
+                                }
+                            } label: {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: status.symbol)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .frame(width: 16, alignment: .leading)
+                                        .foregroundStyle(status.color)
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(entry.displayName)
+                                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(NativeTheme.fileListPrimary)
+                                        HStack(spacing: 6) {
+                                            Text(status.title)
+                                                .font(.system(size: 11, weight: .semibold))
+                                                .foregroundStyle(status.color)
+                                            Text("• \(friendlyRefName(entry.lastBranch)) • \(entry.lastOpenedAt.formatted(date: .abbreviated, time: .shortened))")
+                                                .font(.system(size: 11, weight: .regular))
+                                                .foregroundStyle(NativeTheme.readableSecondary)
+                                        }
+                                        .lineLimit(1)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .sidebarSelectableRow(isSelected: model.selectedLibraryRepoID == entry.id)
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    model.removeLibraryRepository(id: entry.id)
+                                } label: {
+                                    Label("Remove from Library", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    SidebarSectionHeader("Repository Library")
+                }
+                
+                if let selectedEntry = selectedLibraryEntry {
+                    Section {
+                        DisclosureGroup(isExpanded: $showRecentComparisons) {
+                            if displayedSessions.isEmpty {
+                                Text("No sessions yet for this repository.")
+                                    .foregroundStyle(NativeTheme.readableSecondary)
+                                    .padding(.top, 8)
+                            } else {
+                                VStack(spacing: 0) {
+                                    ForEach(displayedSessions) { session in
+                                        Button {
+                                            Task {
+                                                await model.loadLibrarySession(repoID: selectedEntry.id, sessionID: session.id)
+                                            }
+                                        } label: {
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text(friendlyCompareLabel(session.compareLabel))
+                                                    .font(.system(size: 12, weight: .semibold))
+                                                    .foregroundStyle(NativeTheme.fileListPrimary)
+                                                Text("\(session.fileCount) files • \(session.hunkCount) hunks • \(session.bridgeCount) bridges")
+                                                    .font(.system(size: 11, weight: .regular))
+                                                    .foregroundStyle(NativeTheme.readableSecondary)
+                                                Text(session.timestamp.formatted(date: .abbreviated, time: .shortened))
+                                                    .font(.system(size: 10, weight: .regular))
+                                                    .foregroundStyle(NativeTheme.readableSecondary)
+                                            }
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .sidebarSelectableRow(isSelected: model.selectedLibrarySessionID == session.id)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.top, 8)
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(NativeTheme.readableSecondary)
+                                Text("Recent Comparisons")
+                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(NativeTheme.readableSecondary)
+                            }
+                        }
+                        .tint(NativeTheme.readableSecondary)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                }
+            }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+        }
+        .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 360)
+    }
 
     // MARK: - Screen Regions
 
@@ -506,85 +363,6 @@ struct ContentView: View {
         }
         .padding(.top, 8)
         .glassCard()
-    }
-
-    @ViewBuilder
-    private var diffArea: some View {
-        if model.isLoadingDiff && model.files.isEmpty {
-//            VStack(alignment: .leading, spacing: 12) {
-//                ProgressView("Loading diff...")
-//                    .controlSize(.regular)
-//                Text("Parsing changes. Large diffs can take a moment.")
-//                    .font(.system(size: 13, weight: .medium, design: .rounded))
-//                    .foregroundStyle(.secondary)
-//            }
-//            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-//            .padding(16)
-//            .glassCard()
-        } else if model.files.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("No diff loaded")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                Text("Click Choose Repository, then Working Changes.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(16)
-            .glassCard()
-        } else {
-            ScrollViewReader { proxy in
-                ZStack(alignment: .topTrailing) {
-                    ScrollView {
-                        LazyVStack(spacing: 10, pinnedViews: [.sectionHeaders]) {
-                            ForEach(visibleFiles) { file in
-                                Section {
-                                    DiffFileCard(
-                                        file: file,
-                                        focusedHunkID: $focusedHunkID,
-                                        typography: diffTypography
-                                    )
-                                } header: {
-                                    DiffFileStickyHeader(
-                                        file: file,
-                                        isActive: file.id == activeFileID
-                                    )
-                                    .id(file.id)
-                                }
-                            }
-
-                            if visibleFileCount < model.files.count {
-                                ProgressView("Loading more files...")
-                                    .controlSize(.small)
-                                    .padding(.vertical, 12)
-                                    .frame(maxWidth: .infinity)
-                                    .onAppear {
-                                        loadMoreFilesIfNeeded(totalFiles: model.files.count)
-                                    }
-                            }
-                        }
-                    }
-
-                    if model.isLoadingDiff {
-                        ProgressView()
-                            .controlSize(.small)
-                            .padding(10)
-                            .background(.regularMaterial, in: Capsule())
-                            .padding(8)
-                    }
-                }
-                .onChange(of: model.pendingRevealFilePath) { _, pendingPath in
-                    guard let pendingPath else {
-                        return
-                    }
-                    selectedScreen = .diff
-                    Task {
-                        await revealFileInDiff(path: pendingPath, using: proxy)
-                    }
-                }
-            }
-            .glassCard()
-        }
     }
 
     @ViewBuilder
@@ -807,91 +585,9 @@ struct ContentView: View {
         return .init(title: "Custom", color: NativeTheme.readableSecondary, symbol: "slider.horizontal.3")
     }
 
-    private func compareCommitLabel(for entry: GitLogEntry) -> String {
-        let subject = entry.subject.count > 64 ? "\(entry.subject.prefix(61))..." : entry.subject
-        return "\(entry.shortHash)  \(subject)"
-    }
-
-    private func twoCommitCompareLabel(base: GitLogEntry, head: GitLogEntry) -> String {
-        "\(base.shortHash) -> \(head.shortHash)  \(head.subject)"
-    }
-
     // MARK: - Incremental Diff Rendering
-
-    private var visibleFiles: ArraySlice<DiffFile> {
-        let maxVisible = min(visibleFileCount, model.files.count)
-        return model.files.prefix(maxVisible)
-    }
-
-    private var activeFileID: UUID? {
-        if let focusedHunkID,
-           let focusedFile = model.files.first(where: { file in
-               file.hunks.contains(where: { $0.id == focusedHunkID })
-           }) {
-            return focusedFile.id
-        }
-        return visibleFiles.first?.id
-    }
-
     private func resetVisibleFiles(totalFiles: Int) {
         visibleFileCount = min(totalFiles, Self.fileRenderBatchSize)
-    }
-
-    private func loadMoreFilesIfNeeded(totalFiles: Int) {
-        guard visibleFileCount < totalFiles else {
-            return
-        }
-        visibleFileCount = min(totalFiles, visibleFileCount + Self.fileRenderBatchSize)
-    }
-
-    @MainActor
-    private func revealFileInDiff(path: String, using proxy: ScrollViewProxy) async {
-        let targetPath = normalizedDiffPath(path)
-        guard !targetPath.isEmpty else {
-            model.clearPendingRevealFilePath()
-            return
-        }
-
-        guard let targetIndex = model.files.firstIndex(where: { file in
-            diffFile(file, matchesPath: targetPath)
-        }) else {
-            model.clearPendingRevealFilePath()
-            return
-        }
-
-        if visibleFileCount <= targetIndex {
-            visibleFileCount = targetIndex + 1
-            try? await Task.sleep(nanoseconds: 120_000_000)
-        }
-
-        guard targetIndex < model.files.count else {
-            model.clearPendingRevealFilePath()
-            return
-        }
-        let targetFile = model.files[targetIndex]
-        withAnimation(.easeInOut(duration: 0.22)) {
-            proxy.scrollTo(targetFile.id, anchor: .top)
-        }
-        focusedHunkID = targetFile.hunks.first?.id
-        model.clearPendingRevealFilePath()
-    }
-
-    private func diffFile(_ file: DiffFile, matchesPath targetPath: String) -> Bool {
-        let candidates = [file.displayPath, file.oldPath, file.newPath]
-            .map { normalizedDiffPath($0) }
-            .filter { !$0.isEmpty && $0 != "/dev/null" }
-        return candidates.contains(targetPath)
-    }
-
-    private func normalizedDiffPath(_ rawPath: String) -> String {
-        let trimmed = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return ""
-        }
-        if trimmed.hasPrefix("a/") || trimmed.hasPrefix("b/") {
-            return String(trimmed.dropFirst(2))
-        }
-        return trimmed
     }
 
     private func updateDiffTextScale(by delta: CGFloat) {
@@ -904,81 +600,15 @@ struct ContentView: View {
         let nextScale = CommitTreeTypography.clamp(currentScale + delta)
         storedTreeScale = Double(nextScale)
     }
-
-    // MARK: - Compare Menus
-
-    @ViewBuilder
-    private var compareCommitMenuContent: some View {
-        if model.repoPath.isEmpty {
-            Text("Choose a repository first")
-        } else if model.isLoadingRecentBranchCommits {
-            Text("Loading commits...")
-        } else if model.recentBranchCommits.isEmpty {
-            Button("Load \(friendlyRefName(model.currentBranchRef)) commits") {
-                Task {
-                    await model.loadRecentBranchCommits(force: true)
-                }
-            }
-        } else {
-            compareCommitMenuLoadedContent
-        }
-    }
-
-    @ViewBuilder
-    private var compareCommitMenuLoadedContent: some View {
-        Section("Compare to Current State") {
-            Text("Target: current working state (HEAD + staged + unstaged)")
-            ForEach(model.recentBranchCommits, id: \.id) { entry in
-                Button(compareCommitLabel(for: entry)) {
-                    Task {
-                        await model.compareAgainstCommit(entry.id)
-                    }
-                }
-            }
-        }
-
-        Divider()
-
-        Section("Compare Two Commits") {
-            if let selectedBase = selectedTwoCommitBase {
-                Text("Base: \(selectedBase.shortHash)")
-                Button("Clear base selection") {
-                    selectedTwoCommitBaseID = nil
-                }
-                Divider()
-                ForEach(selectedTwoCommitHeads, id: \.id) { head in
-                    Button(twoCommitCompareLabel(base: selectedBase, head: head)) {
-                        Task {
-                            await model.compareBetweenCommits(baseHash: selectedBase.id, headHash: head.id)
-                        }
-                    }
-                }
-            } else {
-                Text("Pick the first commit (base)")
-                ForEach(model.recentBranchCommits, id: \.id) { entry in
-                    Button("Set base: \(compareCommitLabel(for: entry))") {
-                        selectedTwoCommitBaseID = entry.id
-                    }
-                }
-            }
-        }
-
-        Divider()
-        Button("Refresh commit list") {
-            Task {
-                await model.loadRecentBranchCommits(force: true)
-            }
-        }
-    }
 }
 
-private enum WorkbenchScreen: Hashable {
+enum WorkbenchScreen: Hashable {
     case diff
     case log
     case tree
 }
 
-private struct LibraryStatus {
+struct LibraryStatus {
     let title: String
     let color: Color
     let symbol: String
