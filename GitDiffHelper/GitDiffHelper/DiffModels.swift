@@ -39,6 +39,32 @@ struct DiffFile: Identifiable {
     var newPath: String
     var hunks: [DiffHunk]
     var seen: Bool
+    
+    var fileName: String {
+        guard !displayPath.isEmpty else {
+            return "(unknown file)"
+        }
+        return URL(fileURLWithPath: displayPath).lastPathComponent
+    }
+    
+    
+    /**
+     * Determines whether the full file path should be displayed.
+     * This avoids redundant UI when the file is already at the root level.
+     */
+    var shouldShowFullPath: Bool {
+        !displayPath.isEmpty && displayPath != fileName
+    }
+
+    var abbreviatedPath: String {
+        let components = displayPath
+            .components(separatedBy: CharacterSet(charactersIn: "/\\"))
+            .filter { !$0.isEmpty }
+        guard components.count > 3 else {
+            return displayPath
+        }
+        return "…/" + components.suffix(3).joined(separator: "/")
+    }
 }
 
 struct WorkingTreeChange: Identifiable, Hashable {
@@ -116,6 +142,43 @@ struct RepoLibraryEntry: Identifiable, Codable, Hashable {
         self.bookmarkData = bookmarkData
         self.sessions = sessions
     }
+    
+    public var friendlyRefName: String {
+        switch lastBranch {
+        case "HEAD":
+            return "Current Commit"
+        case "HEAD~1":
+            return "Previous Commit"
+        default:
+            return lastBranch
+        }
+    }
+
+    
+    /**
+     * Figures out which icon and label to show based on how much work is saved:
+     * - "No History": Nothing has been done yet.
+     * - "Working": Changes are being made but not yet saved.
+     * - "Commit": A single save point (one step back).
+     * - "Branch": A jump between different versions or sets of changes.
+     * - "Custom": Any other unique version state.
+     */
+    public var status: LibraryStatus {
+        guard let latestSession = sessions.first else {
+            return .init(title: "No History", color: NativeTheme.readableSecondary, symbol: "clock.badge.questionmark")
+        }
+        
+        if latestSession.baseRef.isEmpty && latestSession.headRef.isEmpty {
+            return .init(title: "Working", color: NativeTheme.readableSecondary, symbol: "square.and.pencil")
+        }
+        if latestSession.baseRef == "HEAD~1" && latestSession.headRef == "HEAD" {
+            return .init(title: "Commit", color: NativeTheme.readableSecondary, symbol: "clock")
+        }
+        if latestSession.headRef == "HEAD", latestSession.baseRef != "HEAD~1", !latestSession.baseRef.isEmpty {
+            return .init(title: "Branch", color: NativeTheme.readableSecondary, symbol: "arrow.triangle.branch")
+        }
+        return .init(title: "Custom", color: NativeTheme.readableSecondary, symbol: "slider.horizontal.3")
+    }
 }
 
 struct RepoSessionEntry: Identifiable, Codable, Hashable {
@@ -160,6 +223,18 @@ struct RepoSessionEntry: Identifiable, Codable, Hashable {
         }
         return headRef
     }
+    
+    var friendlyCompareLabel: String {
+        if compareLabel == "Uncommitted" {
+            return "Working Changes"
+        }
+        
+        return compareLabel
+            .replacingOccurrences(of: "HEAD~1", with: "Previous Commit")
+            .replacingOccurrences(of: "HEAD", with: "Current Commit")
+            .replacingOccurrences(of: "->", with: "→")
+    }
+
 }
 
 enum BridgeDiffError: LocalizedError {

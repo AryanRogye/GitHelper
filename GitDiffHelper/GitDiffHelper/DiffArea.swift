@@ -108,8 +108,9 @@ struct DiffArea: View {
                         file: file,
                         isActive: file.id == activeFileID
                     ) { seen in
-                        model.markFileSeen(file: file, seen: seen)
-                        
+                        withAnimation(.bouncy) {
+                            model.markFileSeen(file: file, seen: seen)
+                        }
                     }
                     .id(file.id)
                 }
