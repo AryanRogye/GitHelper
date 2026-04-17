@@ -15,6 +15,7 @@ struct DiffFileStickyHeader: View {
     let file: DiffFile
     var isActive: Bool = false
     var onToggleSeen: (Bool) -> Void
+    var onToggleHidden: (Bool) -> Void
     
     var backgroundShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -49,7 +50,10 @@ struct DiffFileStickyHeader: View {
             Spacer()
             
             VStack(alignment: .trailing) {
-                hunkCountView
+                HStack {
+                    hunkCountView
+                    toggleHiddenButton
+                }
                 toggleSeenButton
             }
         }
@@ -90,6 +94,19 @@ struct DiffFileStickyHeader: View {
         Text("\(file.hunks.count) hunk\(file.hunks.count == 1 ? "" : "s")")
             .font(.system(size: 11, weight: .semibold, design: .rounded))
             .foregroundStyle(NativeTheme.readableSecondary)
+    }
+    
+    private var toggleHiddenButton: some View {
+        Button {
+            onToggleHidden(!file.hidden)
+        } label: {
+            if !file.hidden {
+                Image(systemName: "eye")
+            } else {
+                Image(systemName: "eye.slash")
+            }
+        }
+        .buttonStyle(.plain)
     }
     
     // MARK: - Toggle Seen Button

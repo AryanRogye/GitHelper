@@ -94,24 +94,30 @@ struct DiffArea: View {
         }
     }
     
+    // MARK: - Diff List
     private var diffList: some View {
         LazyVStack(spacing: 10, pinnedViews: [.sectionHeaders]) {
             ForEach(visibleFiles) { file in
                 Section {
-                    DiffFileCard(
-                        file: file,
-                        focusedHunkID: $focusedHunkID,
-                        typography: diffTypography
-                    )
+                    if !file.hidden {
+                        DiffFileCard(
+                            file: file,
+                            focusedHunkID: $focusedHunkID,
+                            typography: diffTypography
+                        )
+                    }
                 } header: {
                     DiffFileStickyHeader(
                         file: file,
-                        isActive: file.id == activeFileID
-                    ) { seen in
-                        withAnimation(.bouncy) {
+                        isActive: file.id == activeFileID,
+                        onToggleSeen: { seen in
                             model.markFileSeen(file: file, seen: seen)
+                        },
+                        onToggleHidden: { hidden in
+                            /// bouncy snaps it shut weirdy and overlaps
+                            model.markFileHidden(file: file, hidden: hidden)
                         }
-                    }
+                    )
                     .id(file.id)
                 }
             }

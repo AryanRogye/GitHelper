@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 @MainActor
 final class DiffViewModel: ObservableObject {
@@ -633,10 +634,22 @@ final class DiffViewModel: ObservableObject {
         }
     }
     
+    public func markFileHidden(file: DiffFile, hidden: Bool) {
+        if let index = files.firstIndex(where: { $0.id == file.id }) {
+            if files.indices.contains(index) {
+                withAnimation(.snappy) {
+                    files[index].hidden = hidden
+                }
+            }
+        }
+    }
+    
     public func markFileSeen(file: DiffFile, seen: Bool) {
         if let index = files.firstIndex(where: { $0.id == file.id }) {
             if files.indices.contains(index) {
-                files[index].seen = seen
+                withAnimation(.bouncy) {
+                    files[index].seen = seen
+                }
             }
         }
     }

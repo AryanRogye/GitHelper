@@ -33,6 +33,7 @@ private struct UnifiedDiffParser {
                 oldPath: "",
                 newPath: "",
                 hunks: [],
+                hidden: false,
                 seen: false
             )
             return

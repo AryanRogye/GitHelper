@@ -38,6 +38,7 @@ struct DiffFile: Identifiable {
     var oldPath: String
     var newPath: String
     var hunks: [DiffHunk]
+    var hidden: Bool
     var seen: Bool
     
     var fileName: String {
