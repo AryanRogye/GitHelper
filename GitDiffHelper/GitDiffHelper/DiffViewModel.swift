@@ -15,7 +15,9 @@ final class DiffViewModel: ObservableObject {
     @Published private(set) var statusLine: String = "Step 1: Choose a repository folder."
     @Published private(set) var hasError = false
     @Published private(set) var isLoadingDiff = false
+    
     @Published private(set) var files: [DiffFile] = []
+    
     @Published private(set) var availableBranchRefs: [String] = ["HEAD"]
     @Published private(set) var isLoadingLog = false
     @Published private(set) var logEntries: [GitLogEntry] = []

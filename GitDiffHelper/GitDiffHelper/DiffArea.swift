@@ -44,56 +44,69 @@ struct DiffArea: View {
     
     var body: some View {
         if model.isLoadingDiff && model.files.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                ProgressView("Loading diff...")
-                    .controlSize(.regular)
-                Text("Parsing changes. Large diffs can take a moment.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(16)
-            .glassCard()
+            loadingDiffView
         } else if model.files.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("No diff loaded")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                Text("Click Choose Repository, then Working Changes.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(16)
-            .glassCard()
+            emptyFilesView
         } else {
-            ScrollViewReader { proxy in
-                ZStack(alignment: .topTrailing) {
-                    ScrollView {
-                        diffList
+            VStack {
+                diffOptionsView
+                ScrollViewReader { proxy in
+                    ZStack(alignment: .topTrailing) {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            diffList
+                        }
+                        
+                        if model.isLoadingDiff {
+                            ProgressView()
+                                .controlSize(.small)
+                                .padding(10)
+                                .background(.regularMaterial, in: Capsule())
+                                .padding(8)
+                        }
                     }
-                    
-                    if model.isLoadingDiff {
-                        ProgressView()
-                            .controlSize(.small)
-                            .padding(10)
-                            .background(.regularMaterial, in: Capsule())
-                            .padding(8)
+                    .onChange(of: model.pendingRevealFilePath) { _, pendingPath in
+                        guard let pendingPath else {
+                            return
+                        }
+                        selectedScreen = .diff
+                        Task {
+                            await revealFileInDiff(path: pendingPath, using: proxy)
+                        }
                     }
                 }
-                .onChange(of: model.pendingRevealFilePath) { _, pendingPath in
-                    guard let pendingPath else {
-                        return
-                    }
-                    selectedScreen = .diff
-                    Task {
-                        await revealFileInDiff(path: pendingPath, using: proxy)
-                    }
-                }
+                .glassCard()
             }
-            .glassCard()
         }
     }
     
+    // MARK: - Loading Diff
+    private var loadingDiffView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ProgressView("Loading diff...")
+                .controlSize(.regular)
+            Text("Parsing changes. Large diffs can take a moment.")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(16)
+        .glassCard()
+    }
+    
+    // MARK: - Empty Files
+    private var emptyFilesView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("No diff loaded")
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+            Text("Click Choose Repository, then Working Changes.")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(16)
+        .glassCard()
+    }
+
     // MARK: - Diff List
     private var diffList: some View {
         LazyVStack(spacing: 10, pinnedViews: [.sectionHeaders]) {
@@ -132,6 +145,37 @@ struct DiffArea: View {
                     }
             }
         }
+    }
+    
+    // MARK: - Diff Options View
+    private var diffOptionsView: some View {
+        HStack(alignment: .center) {
+            Button("Hide All") {
+                for file in visibleFiles {
+                    model.markFileHidden(file: file, hidden: true)
+                }
+            }
+            
+            Button("Show All") {
+                for file in visibleFiles {
+                    model.markFileHidden(file: file, hidden: false)
+                }
+            }
+            
+            Button("Hide Seen") {
+                for file in visibleFiles where file.seen {
+                    model.markFileHidden(file: file, hidden: true)
+                }
+            }
+            
+            Button("Show Unseen") {
+                for file in visibleFiles where !file.seen {
+                    model.markFileHidden(file: file, hidden: false)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: 20, alignment: .topLeading)
+        .glassCard()
     }
     
     private func loadMoreFilesIfNeeded(totalFiles: Int) {
